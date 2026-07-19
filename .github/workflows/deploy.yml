@@ -1,0 +1,62 @@
+name: Deploy RuntimeForest
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: runtimeforest-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: CDK deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      EC2_KEY_PAIR_NAME: ${{ vars.EC2_KEY_PAIR_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: .cdk/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: .cdk
+        run: npm ci
+
+      - name: Build and type-check
+        working-directory: .cdk
+        run: npm run build
+
+      - name: Bootstrap CDK environment
+        working-directory: .cdk
+        run: npx cdk bootstrap
+
+      - name: Deploy
+        working-directory: .cdk
+        run: npx cdk deploy RuntimeForestStack --require-approval never --outputs-file cdk-outputs.json
+
+      - name: Show API endpoint
+        if: success()
+        working-directory: .cdk
+        run: |
+          node -e "const o=require('./cdk-outputs.json').RuntimeForestStack; console.log('API:',o.ApiUrl); console.log('Health:',o.HealthUrl)"

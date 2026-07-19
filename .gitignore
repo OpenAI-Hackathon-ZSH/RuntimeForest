@@ -12,3 +12,6 @@ venv/
 .runtimespy/
 *.db
 .pytest_cache/
+.env
+.env.*
+!.env.example
