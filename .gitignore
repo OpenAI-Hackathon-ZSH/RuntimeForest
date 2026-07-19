@@ -10,6 +10,5 @@ build/
 venv/
 .env
 .runtimespy/
-.graph_cache.json
 *.db
 .pytest_cache/
