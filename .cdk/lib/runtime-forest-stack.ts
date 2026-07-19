@@ -109,7 +109,7 @@ export class RuntimeForestStack extends Stack {
     const mockUserData = ec2.UserData.forLinux();
     mockUserData.addCommands(
       'set -euxo pipefail',
-      'dnf install -y python3-pip unzip awscli curl',
+      'dnf install -y python3-pip unzip awscli',
       'mkdir -p /opt/runtimeforest/services/mock /opt/runtimeforest/vendor/RuntimeSpy',
       `aws s3 cp s3://${mockSource.s3BucketName}/${mockSource.s3ObjectKey} /tmp/mock.zip`,
       `aws s3 cp s3://${runtimeSpySource.s3BucketName}/${runtimeSpySource.s3ObjectKey} /tmp/runtime-spy.zip`,
