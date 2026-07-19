@@ -1,0 +1,7 @@
+{
+  "name": "my-custom-coverage-run",
+  "steps": [
+    {"name": "EU basic", "segment": "eu_basic", "requests": 10, "shipping_address": "Germany"},
+    {"name": "Injected payment failure", "segment": "usa_premium", "scenario": "payment_error", "requests": 2}
+  ]
+}
