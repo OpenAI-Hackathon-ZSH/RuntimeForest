@@ -456,6 +456,151 @@ Return ONLY valid JSON (no markdown):
 
 
 # ============================================================================
+# CODE DELETION AND PR CREATION
+# ============================================================================
+
+def delete_dead_code_from_files(group_nodes, repo_root="."):
+    """Delete dead code lines from source files"""
+    try:
+        # Group nodes by file
+        nodes_by_file = {}
+        for node in group_nodes:
+            file_path = node.get("path", "")
+            if not file_path:
+                continue
+            if file_path not in nodes_by_file:
+                nodes_by_file[file_path] = []
+            nodes_by_file[file_path].append(node)
+
+        # Delete code from each file
+        for file_path, nodes in nodes_by_file.items():
+            full_path = Path(repo_root) / file_path
+            if not full_path.exists():
+                print(f"        ⚠ File not found: {file_path}")
+                continue
+
+            with open(full_path) as f:
+                lines = f.readlines()
+
+            # Sort nodes by start_line descending (delete from bottom up to avoid line shifts)
+            sorted_nodes = sorted(nodes, key=lambda n: n.get("start_line", 0), reverse=True)
+
+            # Delete lines for each node
+            for node in sorted_nodes:
+                start = node.get("start_line", 1) - 1  # Convert to 0-indexed
+                end = node.get("end_line", 1)
+                # Delete lines [start:end]
+                del lines[start:end]
+                print(f"        Deleted {file_path}:{start+1}-{end}")
+
+            # Write back to file
+            with open(full_path, 'w') as f:
+                f.writelines(lines)
+
+        return True
+
+    except Exception as e:
+        print(f"        ✗ Deletion failed: {e}")
+        return False
+
+
+def git_create_pr_with_deletions(group_id, commit_msg, pr_description, group_nodes, repo_root="."):
+    """Create git branch, delete code, and PR for a dead code group"""
+    try:
+        import subprocess
+
+        # Create branch name
+        branch_name = f"cleanup/dead-code-{group_id}"
+
+        # Check if branch exists
+        result = subprocess.run(
+            ["git", "branch", "-a"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True
+        )
+        if branch_name in result.stdout:
+            print(f"      ⚠ Branch {branch_name} already exists, skipping")
+            return None
+
+        # Create and checkout branch
+        subprocess.run(
+            ["git", "checkout", "-b", branch_name],
+            cwd=repo_root,
+            capture_output=True,
+            check=True
+        )
+
+        # Delete the actual dead code
+        if not delete_dead_code_from_files(group_nodes, repo_root):
+            print(f"      ⚠ Deletion failed, skipping PR creation")
+            subprocess.run(["git", "checkout", "-"], cwd=repo_root, capture_output=True)
+            return None
+
+        # Stage ONLY mock-service or services/mock files (not backend changes)
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True
+        )
+
+        # Stage any modified services/mock or mock-service files
+        subprocess.run(
+            ["git", "add", "services/mock/", "mock-service/"],
+            cwd=repo_root,
+            capture_output=True
+        )
+
+        # Check if anything was actually staged
+        status_check = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True
+        )
+        files_staged = any("services/mock/" in line or "mock-service/" in line
+                          for line in status_check.stdout.split("\n") if line)
+
+        if not files_staged:
+            print(f"      ⚠ No mock-service files were modified")
+            subprocess.run(["git", "checkout", "-"], cwd=repo_root, capture_output=True)
+            return None
+
+        # Commit only the deletions
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=repo_root,
+            capture_output=True,
+            check=True
+        )
+
+        # Push branch
+        subprocess.run(
+            ["git", "push", "-u", "origin", branch_name],
+            cwd=repo_root,
+            capture_output=True,
+            check=True
+        )
+
+        # Create PR using gh cli
+        pr_result = subprocess.run(
+            ["gh", "pr", "create", "--title", commit_msg[:60], "--body", pr_description],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        pr_url = pr_result.stdout.strip()
+        return pr_url
+
+    except Exception as e:
+        print(f"      ✗ PR creation failed: {e}")
+        return None
+
+
+# ============================================================================
 # SCHEDULED TASKS FOR S3 SYNC AND PR CREATION
 # ============================================================================
 
@@ -569,13 +714,21 @@ def create_prs_for_dead_code():
 
                 print(f"      Commit: {commit_msg[:60]}...")
 
-                # Create PR
+                # Create PR with actual code deletion
                 try:
-                    # TODO: Integrate with PRGenerator from dead_code_cleanup.py
-                    # For now, just log what would be deleted
-                    result = f"SUCCESS: Group {group_id} - {len(group_nodes)} nodes ready for deletion"
-                    created_prs.append(result)
-                    print(f"      ✓ {result}")
+                    pr_url = git_create_pr_with_deletions(
+                        group_id,
+                        commit_msg,
+                        pr_description,
+                        group_nodes,
+                        repo_root="."
+                    )
+                    if pr_url:
+                        created_prs.append(pr_url)
+                        print(f"      ✓ PR created: {pr_url}")
+                    else:
+                        failed_prs.append(f"Group {group_id}")
+                        print(f"      ✗ PR creation returned None")
                 except Exception as pr_error:
                     failed_prs.append(str(pr_error))
                     print(f"      ✗ {pr_error}")
