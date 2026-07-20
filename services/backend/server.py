@@ -209,6 +209,28 @@ async def clear_graph():
     return {"status": "cleared"}
 
 
+@app.post("/reset")
+async def reset_graph_frequencies():
+    """Keep the current graph structure and reset every node frequency to zero."""
+    global graph_cache
+
+    nodes = graph_cache["graph"]["nodes"]
+    for node in nodes:
+        node["frequency"] = 0
+
+    graph_cache["summary"]["executed_nodes"] = 0
+    graph_cache["summary"]["unseen_nodes"] = len(nodes)
+
+    cache_file = Path(__file__).parent / ".graph_cache.json"
+    with open(cache_file, 'w') as f:
+        json.dump(graph_cache, f, indent=2)
+
+    return {
+        "status": "reset",
+        "nodes_reset": len(nodes),
+    }
+
+
 # Serve the Next.js frontend
 # If built, serve from build/output
 frontend_path = Path(__file__).parent.parent.parent / "BranchFrequencyVisual" / "build" / "output"
@@ -226,6 +248,7 @@ if __name__ == "__main__":
     print("  POST /report/node        - Update node frequency")
     print("  GET  /api/stats          - Get current state")
     print("  GET  /health             - Health check")
+    print("  POST /reset              - Reset node frequencies to zero")
     print("\nStarting server on http://localhost:8000")
     print("="*70 + "\n")
 

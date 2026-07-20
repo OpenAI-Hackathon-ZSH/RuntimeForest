@@ -99,14 +99,6 @@ def create_order(payload: OrderRequest) -> dict:
     return {"request_number": request_count, "scenario": payload.scenario, "result": result}
 
 
-@app.post("/reset")
-def reset() -> dict:
-    """Reset only request accounting; instrumentation is reset by a new run."""
-    global request_count
-    request_count = 0
-    return {"status": "reset"}
-
-
 if __name__ == "__main__":
     import uvicorn
 
