@@ -25,8 +25,12 @@ import sys
 import subprocess
 import boto3
 from openai import OpenAI
+from dotenv import load_dotenv
 
 from apscheduler.schedulers.background import BackgroundScheduler
+
+# Load .env file
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -343,8 +347,53 @@ def read_source_code(file_path, start_line, end_line):
         return None
 
 
-def git_create_pr(group_id, commit_msg, pr_description, repo_root="."):
-    """Create git branch and PR for a dead code group"""
+def delete_dead_code_from_files(group_nodes, repo_root="."):
+    """Delete dead code lines from source files"""
+    try:
+        # Group nodes by file
+        nodes_by_file = {}
+        for node in group_nodes:
+            file_path = node.get("path", "")
+            if not file_path:
+                continue
+            if file_path not in nodes_by_file:
+                nodes_by_file[file_path] = []
+            nodes_by_file[file_path].append(node)
+
+        # Delete code from each file
+        for file_path, nodes in nodes_by_file.items():
+            full_path = Path(repo_root) / file_path
+            if not full_path.exists():
+                print(f"        ⚠ File not found: {file_path}")
+                continue
+
+            with open(full_path) as f:
+                lines = f.readlines()
+
+            # Sort nodes by start_line descending (delete from bottom up to avoid line shifts)
+            sorted_nodes = sorted(nodes, key=lambda n: n.get("start_line", 0), reverse=True)
+
+            # Delete lines for each node
+            for node in sorted_nodes:
+                start = node.get("start_line", 1) - 1  # Convert to 0-indexed
+                end = node.get("end_line", 1)
+                # Delete lines [start:end]
+                del lines[start:end]
+                print(f"        Deleted {file_path}:{start+1}-{end}")
+
+            # Write back to file
+            with open(full_path, 'w') as f:
+                f.writelines(lines)
+
+        return True
+
+    except Exception as e:
+        print(f"        ✗ Deletion failed: {e}")
+        return False
+
+
+def git_create_pr(group_id, commit_msg, pr_description, group_nodes, repo_root="."):
+    """Create git branch, delete code, and PR for a dead code group"""
     try:
         import subprocess
 
@@ -370,9 +419,22 @@ def git_create_pr(group_id, commit_msg, pr_description, repo_root="."):
             check=True
         )
 
-        # Stage and commit (empty commit for demo - actual deletion would be done by code)
+        # Delete the actual dead code
+        if not delete_dead_code_from_files(group_nodes, repo_root):
+            print(f"      ⚠ Deletion failed, skipping PR creation")
+            subprocess.run(["git", "checkout", "-"], cwd=repo_root, capture_output=True)
+            return None
+
+        # Stage and commit the deletions
         subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", commit_msg],
+            ["git", "add", "-A"],
+            cwd=repo_root,
+            capture_output=True,
+            check=True
+        )
+
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
             cwd=repo_root,
             capture_output=True,
             check=True
@@ -388,7 +450,7 @@ def git_create_pr(group_id, commit_msg, pr_description, repo_root="."):
 
         # Create PR using gh cli
         pr_result = subprocess.run(
-            ["gh", "pr", "create", "--title", commit_msg[:50], "--body", pr_description],
+            ["gh", "pr", "create", "--title", commit_msg[:60], "--body", pr_description],
             cwd=repo_root,
             capture_output=True,
             text=True,
@@ -629,12 +691,13 @@ def create_prs_for_dead_code():
 
                 print(f"      Commit: {commit_msg[:60]}...")
 
-                # Create PR with git + gh cli
+                # Create PR with git + gh cli (with actual code deletion)
                 try:
                     pr_url = git_create_pr(
                         group_id,
                         commit_msg,
                         pr_description,
+                        group_nodes,
                         repo_root="."
                     )
                     if pr_url:
