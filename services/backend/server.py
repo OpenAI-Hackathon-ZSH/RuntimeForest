@@ -8,6 +8,7 @@ Endpoints:
   GET  /api/stats          - Get current graph state
 """
 
+import copy
 import json
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -179,6 +180,19 @@ async def get_stats():
     return graph_cache
 
 
+@app.get("/stats/clean")
+async def get_clean_stats():
+    """Return stats without edges and with only unexecuted nodes."""
+    response = copy.deepcopy(graph_cache)
+    clean_graph = response["graph"]
+    clean_graph["nodes"] = [
+        node for node in clean_graph["nodes"]
+        if node.get("frequency", 0) == 0
+    ]
+    clean_graph.pop("edges", None)
+    return response
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint"""
@@ -247,6 +261,7 @@ if __name__ == "__main__":
     print("  POST /report/full_graph  - Upload initial graph")
     print("  POST /report/node        - Update node frequency")
     print("  GET  /api/stats          - Get current state")
+    print("  GET  /stats/clean        - Get unexecuted nodes without edges")
     print("  GET  /health             - Health check")
     print("  POST /reset              - Reset node frequencies to zero")
     print("\nStarting server on http://localhost:8000")
