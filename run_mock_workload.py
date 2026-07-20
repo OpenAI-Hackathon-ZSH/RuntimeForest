@@ -27,7 +27,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--script", default="representative", choices=list_scripts())
     parser.add_argument("--file", help="Custom JSON workload file; overrides --script")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8100")
+    parser.add_argument("--base-url", default="http://100.58.3.145:8100/")
     parser.add_argument("--duration", type=float, help="Repeat passes until this many seconds elapse")
     parser.add_argument("--repeat", action="store_true", help="Repeat passes until interrupted (or --duration elapses)")
     parser.add_argument("--max-requests", type=int, help="Safety cap, useful with --repeat")

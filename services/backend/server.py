@@ -608,7 +608,7 @@ scheduler = BackgroundScheduler()
 scheduler.daemon = True
 
 def sync_to_s3():
-    """Daily task: Sync cache to S3 at 2 AM UTC"""
+    """Daily task: Sync cache to S3 at 2 AM UTC, then trigger PR creation"""
     try:
         s3 = boto3.client('s3')
         bucket = os.getenv("S3_BUCKET", "code-manager-cache")
@@ -621,6 +621,11 @@ def sync_to_s3():
         )
 
         print(f"✓ [{datetime.utcnow().isoformat()}] Synced cache to S3 (nodes: {len(graph_cache['graph']['nodes'])}, unseen: {graph_cache['summary'].get('unseen_nodes', 0)})")
+
+        # Immediately trigger PR creation after S3 sync
+        print(f"\n🚀 Triggering PR creation immediately after S3 sync...")
+        create_prs_for_dead_code()
+
     except Exception as e:
         print(f"✗ S3 sync failed: {e}")
 
@@ -763,19 +768,9 @@ def start_scheduler():
         name='Daily S3 Sync'
     )
 
-    # Schedule PR creation at 3 AM UTC
-    scheduler.add_job(
-        create_prs_for_dead_code,
-        'cron',
-        hour=3,
-        minute=0,
-        timezone='UTC',
-        id='daily_pr_creation',
-        name='Daily PR Creation'
-    )
-
+    # PR creation now runs immediately after S3 sync (no separate 3 AM task)
     scheduler.start()
-    print("✓ Scheduled tasks started: S3 sync (2 AM UTC), PR creation (3 AM UTC)")
+    print("✓ Scheduled tasks started: S3 sync (2 AM UTC) → triggers PR creation")
 
 
 @app.on_event("startup")
