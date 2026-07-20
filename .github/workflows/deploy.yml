@@ -32,16 +32,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download RuntimeSpy source
-        run: |
-          curl --fail --silent --show-error --location \
-            --output /tmp/runtime-spy.zip \
-            https://github.com/OpenAI-Hackathon-ZSH/RuntimeSpy/archive/refs/heads/main.zip
-          mkdir -p vendor
-          unzip -q /tmp/runtime-spy.zip -d vendor
-          mv vendor/RuntimeSpy-main vendor/RuntimeSpy
-          test -f vendor/RuntimeSpy/pyproject.toml -o -f vendor/RuntimeSpy/setup.py
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -69,4 +59,4 @@ jobs:
         if: success()
         working-directory: .cdk
         run: |
-          node -e "const o=require('./cdk-outputs.json').RuntimeForestStack; console.log('Backend API:',o.ApiUrl); console.log('Backend health:',o.HealthUrl); console.log('Mock API:',o.MockApiUrl); console.log('Mock health:',o.MockHealthUrl)"
+          node -e "const o=require('./cdk-outputs.json').RuntimeForestStack; console.log('Backend API:',o.ApiUrl); console.log('Backend health:',o.HealthUrl)"

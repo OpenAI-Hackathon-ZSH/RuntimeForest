@@ -1,8 +1,7 @@
 # RuntimeForest AWS CDK
 
-This stack deploys `services/backend` and the instrumented `services/mock` service
-to separate Amazon Linux EC2 instances. Both have stable Elastic IPs: the backend
-is public on port `8000`, and the mock API is public on port `8100`.
+This stack deploys `services/backend` to an Amazon Linux EC2 instance with a stable
+Elastic IP and public access on port `8000`.
 
 ## Credentials
 
@@ -45,13 +44,8 @@ Actions settings):
 
 The workflow bootstraps the target CDK environment automatically before deploy.
 
-Backend, Mock, and RuntimeSpy are packaged as separate CDK assets. Backend source
-changes replace only the Backend EC2. Mock or RuntimeSpy changes replace only the
-Mock EC2. CloudFormation updates both only when both sides actually change.
-
-The workflow downloads the public RuntimeSpy `main.zip` before CDK packages the
-application. The mock EC2 installs this bundled local copy and does not need to
-access GitHub during startup.
+Only the Backend source is packaged as a CDK asset. Backend source changes replace
+the Backend EC2 so the new revision is installed reliably.
 
 ## Remove
 
