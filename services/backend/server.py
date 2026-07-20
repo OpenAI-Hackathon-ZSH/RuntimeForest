@@ -189,7 +189,11 @@ async def get_clean_stats():
         node for node in clean_graph["nodes"]
         if node.get("frequency", 0) == 0
     ]
+    for node in clean_graph["nodes"]:
+        for field in ("qualname", "parent_id", "type", "label"):
+            node.pop(field, None)
     clean_graph.pop("edges", None)
+    clean_graph.get("hierarchy", {}).pop("files", None)
     return response
 
 
